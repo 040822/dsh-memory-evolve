@@ -570,28 +570,28 @@ test('renderSnapshot injects key facts but keeps project and daily on-demand', a
   // live-read/change-detected mechanism as the global tracks).
   assert.ok(snapshot.includes('## 本项目关键记忆'))
   assert.ok(snapshot.includes('X 项目的长期约定'))
-  assert.ok(snapshot.includes('memory 工具 target=key'))
+  assert.ok(!snapshot.includes('memory 工具 target=key'), '2026-09-22 瘦身：快照不再重复工具名说明')
   // without a cwd, no key section (nothing to inject)
   const noCwd = renderSnapshot(config, store, { id: 'b', session: { header: {} } })
   assert.ok(!noCwd.includes('## 本项目关键记忆'))
-  assert.ok(snapshot.includes('## 记忆 memory-evolve'))
+  assert.ok(snapshot.includes('## 记忆与待办 dtodo 工具'))
   assert.ok(snapshot.includes('target=project'))
   // per-turn duties: one minimal checklist, text-first tool-after pattern
-  assert.ok(snapshot.includes('每轮收尾'))
-  assert.ok(snapshot.includes('每轮收尾分两步'))
+  assert.ok(snapshot.includes('收尾两步'))
+  assert.ok(snapshot.includes('收尾两步'))
   assert.ok(snapshot.includes('下一条消息输出完整回复'))
   assert.ok(snapshot.includes('一次调用'))
   assert.ok(snapshot.includes('entries 数组'))
-  assert.ok(snapshot.includes('内容不要自带时间/日期前缀'))
+  assert.ok(snapshot.includes('内容不要自带时间戳'))
   // key duty: importance-gated, never a per-turn mandate — and it goes
   // through user confirmation now (提交建议)
   assert.ok(snapshot.includes('重要项目事实'))
-  assert.ok(snapshot.includes('target=key 提交 1 条建议'))
+  assert.ok(snapshot.includes('target=key 建议'))
   // subagent sessions get the restrained wording instead of the per-turn duty
   const subSnapshot = renderSnapshot(config, store, { id: 's', session: { header: { origin: 'subagent' } } })
   assert.ok(subSnapshot.includes('独立成果'))
-  assert.ok(subSnapshot.includes('不要为写而写'))
-  assert.ok(!subSnapshot.includes('每轮收尾'))
+  assert.ok(subSnapshot.includes('为写而写'))
+  assert.ok(!subSnapshot.includes('（不写正文）'), 'subagent wording differs from the main turn-end head')
   assert.ok(!subSnapshot.includes('各写 1 条'))
   clean(dir)
 })
@@ -602,21 +602,21 @@ test('issue #43: the dtodo turn-end hint reaches user sessions only, never subag
   const store = new MemoryStore(config.memoryDir, config)
   // 真人会话：保留「收尾检查待办」职责（dtodo 提示是面向用户的收尾指令）
   const user = renderSnapshot(config, store, { id: 'a', session: { header: {} } })
-  assert.ok(user.includes('待办（dtodo）'))
-  assert.ok(user.includes('收尾时调用 dtodo list'))
+  assert.ok(user.includes('dtodo list'), 'todo turn-end hint present for user sessions')
+  assert.ok(user.includes('收尾调 dtodo list'))
   // 子代理：收尾段整体降级，dtodo 提示必须一并豁免（issue #43 根因：
   // 同一函数内 review 计数 / 写入看门狗 / 收尾标题都已按 isSubagent 降级，
   // 唯独 todoHint 漏了 → 子代理被诱导多调一次 dtodo 白烧 token）
   const sub = renderSnapshot(config, store, { id: 'b', session: { header: { origin: 'subagent' } } })
-  assert.ok(!sub.includes('待办（dtodo）'), 'subagent snapshot never carries the dtodo turn-end hint')
-  assert.ok(!sub.includes('收尾时调用 dtodo list'))
+  assert.ok(!sub.includes('dtodo list'), 'subagent snapshot never carries the dtodo turn-end hint')
+  assert.ok(!sub.includes('收尾调 dtodo list'))
   // 头部工具清单的事实陈述保留（子代理确实注册了 dtodo 工具），只有收尾指导被豁免
-  assert.ok(sub.includes('dtodo 待办工具'))
+  assert.ok(sub.includes('dtodo'), 'tool-roster fact line keeps the dtodo name')
   // 待办能力关闭时两边都不注入该提示
   const off = resolveConfig({ memoryDir: dir, todoEnabled: false })
   const offStore = new MemoryStore(off.memoryDir, off)
   const offUser = renderSnapshot(off, offStore, { id: 'a', session: { header: {} } })
-  assert.ok(!offUser.includes('待办（dtodo）'))
+  assert.ok(!offUser.includes('dtodo list'))
   clean(dir)
 })
 
@@ -659,18 +659,18 @@ test('renderSnapshot per-turn write switches compose the hint per track', () => 
   assert.ok(!noDaily.includes('含 target=daily 各一项'))
   // both off: the key duty (default on) keeps the checklist alive
   const none = renderSnapshot(resolveConfig({ memoryDir: dir, perTurnProjectWrites: false, perTurnDailyWrites: false }), store, agent)
-  assert.ok(none.includes('每轮收尾'))
-  assert.ok(none.includes('target=key 提交 1 条建议'))
+  assert.ok(none.includes('收尾两步'))
+  assert.ok(none.includes('target=key 建议'))
   assert.ok(none.includes('target=project'))
   assert.ok(none.includes('target=daily'))
   // all three off: no write duty at all, hint degrades to on-demand reads
   const allOff = renderSnapshot(resolveConfig({ memoryDir: dir, perTurnProjectWrites: false, perTurnDailyWrites: false, perTurnKeyWrites: false }), store, agent)
-  assert.ok(!allOff.includes('target=key 提交 1 条建议'))
-  assert.ok(!allOff.includes('每轮收尾'))
+  assert.ok(!allOff.includes('target=key 建议'))
+  assert.ok(!allOff.includes('收尾两步'))
   // key off: only daily/project keep their write duties
   const noKey = renderSnapshot(resolveConfig({ memoryDir: dir, perTurnKeyWrites: false }), store, agent)
   assert.ok(noKey.includes('含 target=daily 与 target=project 各一项'))
-  assert.ok(!noKey.includes('target=key 提交 1 条建议'))
+  assert.ok(!noKey.includes('target=key 建议'))
   clean(dir)
 })
 
@@ -681,10 +681,10 @@ test('renderSnapshot review section: main sessions only, when enabled, static te
   const agent = { id: 'a', session: { header: { cwd: '/proj/x' } } }
   // review enabled → main session gets the in-turn review section
   const on = renderSnapshot(resolveConfig({ memoryDir: dir, reviewEnabled: true }), store, agent)
-  assert.ok(on.includes('每轮收尾'))
+  assert.ok(on.includes('收尾两步'))
   assert.ok(on.includes('memory_review_status'))
   assert.ok(on.includes('action=complete'))
-  assert.ok(on.includes('无提醒则跳过，不要调用 check'), 'no per-turn check duty')
+  assert.ok(on.includes('不要调 check'), 'no per-turn check duty')
   assert.ok(!on.includes('action=check'), 'no check step in the fixed hint')
   assert.ok(on.includes('memory_suggest'))
   assert.ok(on.includes('skill_manage'))
@@ -700,7 +700,7 @@ test('renderSnapshot review section: main sessions only, when enabled, static te
   // review disabled → no section
   const off = renderSnapshot(config, store, agent)
   assert.ok(!off.includes('memory_review_status'), 'no review steps without reviewEnabled')
-  assert.ok(off.includes('写入：用 memory 工具'), 'write duty stays without review')
+  assert.ok(off.includes('写入：'), 'write duty stays without review')
   // subagent sessions never get the review duty
   const sub = renderSnapshot(resolveConfig({ memoryDir: dir, reviewEnabled: true }), store, { id: 's', session: { header: { origin: 'subagent' } } })
   assert.ok(!sub.includes('memory_review_status'))
@@ -721,7 +721,7 @@ test('renderSnapshot write watchdog: warns past the threshold, static text, swit
   // below threshold (default 2): the fixed duty text stays, no warning
   const fresh = renderSnapshot(config, store, agent, undefined, null, gap(1))
   assert.ok(!fresh.includes('记忆写入遗漏提醒'))
-  assert.ok(fresh.includes('每轮收尾'), 'fixed duty hint stays')
+  assert.ok(fresh.includes('收尾两步'), 'fixed duty hint stays')
   // at/above threshold: sticky warning appended after the turn-end block
   const due1 = renderSnapshot(config, store, agent, undefined, null, gap(2))
   assert.ok(due1.includes('⚠️ **记忆写入遗漏提醒**'))
@@ -933,7 +933,7 @@ test('renderSnapshot injects only KEY entries covering the current branch', () =
     assert.ok(snapshot.includes('仅当前分支'))
     assert.ok(!snapshot.includes('其他分支的约定'))
     // 分支信息随 key 一起注入：小节标题 + 提示行
-    assert.ok(snapshot.includes(`当前分支：${branch}`))
+    assert.ok(snapshot.includes(`分支 ${branch}`))
     assert.ok(snapshot.includes(`**${branch}**`))
     // keyBranchFilter: false → 不过滤（全部注入，无分支信息）
     const off = renderSnapshot(resolveConfig({ memoryDir: config.memoryDir, keyBranchFilter: false }), store, agent)

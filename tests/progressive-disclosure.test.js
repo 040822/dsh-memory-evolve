@@ -195,21 +195,23 @@ test('expand：审查修复回归——分支作用域过滤（分支 A 不能 e
 })
 
 test('renderSnapshot：off（默认）全量注入，on 摘要注入带 [id] 与 expand 提示', () => {
+  // 2026-09-22 注入瘦身：key 轨默认由 'off' 改为 'auto'（见 DEFAULTS），且
+  // 快照文案整体压缩——断言改为**行为口径**（是否摘要注入、是否外泄正文），
+  // 不再钉死某段文案措辞；'off' 用例显式传参以保持原语义。
   const dir = tempDir()
   const cwd = '/proj/pd4'
   const agent = { id: 'a', session: { header: { cwd } } }
   const store = new MemoryStore(dir)
   store.add('key', '[summary:显式摘要] 这是一条很长很长的正文内容第一行\n还有第二行', agent)
   store.add('key', '没有显式摘要的条目', agent)
-  // off（默认）：全文注入、无 summary 标签
-  const off = renderSnapshot(resolveConfig({ memoryDir: dir }), store, agent)
+  // off：全文注入、无 summary 标签、不出现 expand 指引
+  const off = renderSnapshot(resolveConfig({ memoryDir: dir, keyProgressiveDisclosure: 'off' }), store, agent)
   assert.ok(off.includes('这是一条很长很长的正文内容第一行'))
   assert.ok(!off.includes('[summary:显式摘要]'))
-  assert.ok(!off.includes('摘要模式'))
+  assert.ok(!off.includes('action=expand+id'))
   // on：摘要注入
   const on = renderSnapshot(resolveConfig({ memoryDir: dir, keyProgressiveDisclosure: 'on' }), store, agent)
-  assert.ok(on.includes('摘要模式'))
-  assert.ok(on.includes('action=expand+id'))
+  assert.ok(on.includes('action=expand+id'), 'summary mode advertises expand')
   assert.ok(on.includes('显式摘要'), 'explicit summary used when present')
   assert.ok(!on.includes('这是一条很长很长的正文内容第一行'), 'full body must not leak in summary mode')
   // 无显式摘要的条目 → autoSummary 首行兜底
@@ -224,15 +226,15 @@ test('renderSnapshot：auto 模式按条目数+字符数双阈值判定', () => 
   const store = new MemoryStore(dir)
   store.add('key', '短条目一', agent)
   store.add('key', '短条目二', agent)
-  // 条目数 ≤ 3 且字符 ≤ 1500 → 全量
+  // 条目数 ≤ 3 且字符 ≤ 1500 → 全量（阈值键 2026-09-22 起三轨共用：trackFullInject*）
   const small = renderSnapshot(resolveConfig({ memoryDir: dir, keyProgressiveDisclosure: 'auto' }), store, agent)
-  assert.ok(!small.includes('摘要模式'), 'small key set injects full text in auto mode')
+  assert.ok(!small.includes('action=expand+id'), 'small key set injects full text in auto mode')
   assert.ok(small.includes('短条目一'))
   // 字符超限 → 摘要（字符阈值调到极小值）
-  const big = renderSnapshot(resolveConfig({ memoryDir: dir, keyProgressiveDisclosure: 'auto', keyFullInjectCharLimit: 1 }), store, agent)
-  assert.ok(big.includes('摘要模式'), 'over char limit falls back to summary in auto mode')
+  const big = renderSnapshot(resolveConfig({ memoryDir: dir, keyProgressiveDisclosure: 'auto', trackFullInjectCharLimit: 1 }), store, agent)
+  assert.ok(big.includes('action=expand+id'), 'over char limit falls back to summary in auto mode')
   // 条目数超限 → 摘要（条目阈值调到 1，两条数据）
-  const many = renderSnapshot(resolveConfig({ memoryDir: dir, keyProgressiveDisclosure: 'auto', keyFullInjectThreshold: 1 }), store, agent)
-  assert.ok(many.includes('摘要模式'), 'over entry threshold falls back to summary in auto mode')
+  const many = renderSnapshot(resolveConfig({ memoryDir: dir, keyProgressiveDisclosure: 'auto', trackFullInjectThreshold: 1 }), store, agent)
+  assert.ok(many.includes('action=expand+id'), 'over entry threshold falls back to summary in auto mode')
   clean(dir)
 })

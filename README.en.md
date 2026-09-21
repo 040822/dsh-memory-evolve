@@ -284,6 +284,34 @@ Full docs for each feature are in the corresponding tab's "Guide".
 
 ---
 
+## Saving Tokens: Progressive Disclosure and Identity Anchors (2026-09-22)
+
+Two costs are paid on every single turn: the injected snapshot and the tool descriptions. This plugin compresses both:
+
+| Item | Before | After (measured on this machine's real memory, zh) |
+|---|---|---|
+| Injected snapshot | 3048 chars | **767** |
+| `memory` tool description | 2644 chars | **1213** |
+| `dtodo` tool description | 1316 chars | **846** |
+
+All three memory tracks (memory / user / key) use `auto` progressive disclosure by default: small data (≤ 3 entries AND ≤ 1500 chars) is injected in full, larger data injects one summary line per entry (`- [id] summary`), and the model can pull the full text with `memory action=expand+id` (all three tracks support it). The whole snapshot is bounded by `snapshotCharBudget` (1200 chars by default): over budget the **oldest** entries are trimmed first and the section ends with "N more entries: read them with memory action=list" — what is trimmed is the injection, never the memory itself.
+
+For content that must never be forgotten (who I am / who you are / what I am here to do), write it with `core: true`: it lands in the **identity anchor** section at the top of the snapshot, one line each, **never trimmed** (capped by `identityCharLimit`, 300 chars by default) — across projects, sessions and machines. `replace` inherits the core mark automatically unless overridden.
+
+Config keys (Settings → Config tab, or `plugin-state.json`):
+
+| Key | Default | Meaning |
+|---|---|---|
+| `memoryProgressiveDisclosure` / `userProgressiveDisclosure` / `keyProgressiveDisclosure` | `auto` | `auto` / `off` always full / `on` always summary |
+| `trackFullInjectThreshold` | 3 | auto: full injection only at or below this entry count |
+| `trackFullInjectCharLimit` | 1500 | auto: full injection only at or below this char count |
+| `snapshotCharBudget` | 1200 | hard character budget for the whole snapshot |
+| `identityCharLimit` | 300 | cap for the identity-anchor section |
+
+> Note: the key track's default changed from "always full" to `auto` (small data is still injected in full). Set it to `off` to restore the old behaviour.
+
+---
+
 ## Release Versions
 
 The plugin uses **git tag** as the release version identifier (two formats supported: **date-stamp `v<pure digits>`** like `v26081302` (recommended for daily releases), semantic `v1.2.3`): pushing the main branch in daily development triggers no update prompt — only a release tag is detected by each device.

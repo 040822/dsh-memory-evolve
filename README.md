@@ -283,6 +283,34 @@ AI 的对话是「一次性」的：换项目、隔几天、开新会话，它�
 
 ---
 
+## 省 token：渐进式披露与身份锚点（2026-09-22）
+
+每轮对话都要付的「常驻成本」有两块：注入快照 + 工具描述。本插件把两者都压到最小：
+
+| 项 | 改造前 | 改造后（本机真实记忆实测，zh） |
+|---|---|---|
+| 注入快照 | 3048 字符 | **767** |
+| `memory` 工具描述 | 2644 字符 | **1213** |
+| `dtodo` 工具描述 | 1316 字符 | **846** |
+
+三条记忆轨（memory / user / key）默认 `auto` 渐进式披露：数据量小（条目数 ≤ 3 且总字符 ≤ 1500）时全量注入，数据量大时每条只注入一行摘要 `- [id] 摘要`，模型需要细节时用 `memory action=expand+id` 取全文（三轨都支持）。整段快照受 `snapshotCharBudget`（默认 1200 字符）约束，超预算时从**最旧**条目开始裁，并在段尾标注「其余 N 条用 memory action=list 读取」——裁掉的是注入，不是记忆本身。
+
+想要「永远不忘」的内容（我是谁 / 你是谁 / 我在做什么），写入时加 `core: true`：它们进入快照顶部的**身份锚点**段，一行一条、**永不裁剪**（总长由 `identityCharLimit` 控制，默认 300 字符），跨项目、跨会话、跨机器都在。`replace` 不显式指定时自动继承 core 标记。
+
+配置项（「Memory Evolve 设置 → 配置」Tab，或 `plugin-state.json`）：
+
+| 键 | 默认 | 说明 |
+|---|---|---|
+| `memoryProgressiveDisclosure` / `userProgressiveDisclosure` / `keyProgressiveDisclosure` | `auto` | `auto` 自动 / `off` 始终全量 / `on` 始终摘要 |
+| `trackFullInjectThreshold` | 3 | auto：条目数 ≤ 此值才可能全量 |
+| `trackFullInjectCharLimit` | 1500 | auto：总字符 ≤ 此值才可能全量 |
+| `snapshotCharBudget` | 1200 | 整段快照的字符预算（硬上限） |
+| `identityCharLimit` | 300 | 身份锚点段总长上限 |
+
+> 提示：改造后 key 轨的默认注入方式由「始终全量」变为 `auto`（小数据量仍全量）。想恢复旧行为把它设为 `off` 即可。
+
+---
+
 ## 发布版本
 
 插件使用 **git tag** 作为发布版本标识（两种格式都支持：**日期戳 `v<纯数字>`** 如 `v26081302`（日常发版推荐）、语义化 `v1.2.3`）：日常开发推送 main 分支不会触发任何更新提示，只有打了发布 tag 才会被各设备检测到。

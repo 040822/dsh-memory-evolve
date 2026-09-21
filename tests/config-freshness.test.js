@@ -62,10 +62,10 @@ test('功能验证：Web 面板改 keyProgressiveDisclosure → 新会话快照�
 
   const snapOf = (agent) => snapshotContext.text({ agent })
 
-  // 1) 默认 off：A 项目会话 → 全量注入 A 的 key，绝无 B 的内容
+  // 1) 小数据量（默认 auto，1 条 ≤ 阈值）：A 项目会话 → 全量注入 A 的 key，绝无 B 的内容
   const before = snapOf(projA)
   assert.ok(before.includes('甲项目的关键约定正文第一行'), 'off 模式全量注入本项目 key')
-  assert.ok(!before.includes('摘要模式'))
+  assert.ok(!before.includes('action=expand+id'), 'auto + tiny track injects full text')
   assert.ok(!before.includes('乙项目'), '其他项目的 key 不得注入本项目会话')
 
   // 2) 模拟 Web 面板 POST /api/config { patch: { keyProgressiveDisclosure: 'on' } }
@@ -84,7 +84,7 @@ test('功能验证：Web 面板改 keyProgressiveDisclosure → 新会话快照�
   // 3) 同一进程内**新建**的项目会话（新 agent 对象）→ 快照立即是摘要模式
   const newAgentA = { id: 'a2', session: { header: { cwd: '/proj/alpha' } } }
   const after = snapOf(newAgentA)
-  assert.ok(after.includes('摘要模式'), 'new session snapshot uses the updated config, not the default')
+  assert.ok(after.includes('action=expand+id'), 'new session snapshot uses the updated config, not the default')
   assert.ok(after.includes('甲项目约定'), 'summary (not full body) injected')
   assert.ok(!after.includes('甲项目的关键约定正文第一行'), 'full body must not leak after switching to summary mode')
   assert.ok(!after.includes('乙项目'), 'cross-project isolation holds in summary mode')
@@ -96,7 +96,7 @@ test('功能验证：Web 面板改 keyProgressiveDisclosure → 新会话快照�
   apply(ctx2, { memoryDir: dir })
   const snapshotContext2 = ctx2.state.contexts.find((c) => c.name === 'memory:snapshot')
   const afterRestart = snapshotContext2.text({ agent: { id: 'a3', session: { header: { cwd: '/proj/alpha' } } } })
-  assert.ok(afterRestart.includes('摘要模式'), 'config persisted across restart (stateFile)')
+  assert.ok(afterRestart.includes('action=expand+id'), 'config persisted across restart (stateFile)')
   assert.ok(afterRestart.includes('甲项目约定'))
 
   clean(dir)

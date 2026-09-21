@@ -768,6 +768,6 @@ test('todo disabled: snapshot omits dtodo guidance', async () => {
   const enabled = renderSnapshot({ todoEnabled: true }, store, undefined, undefined)
   assert.ok(!disabled.includes('dtodo'))
   assert.ok(enabled.includes('dtodo'))
-  assert.ok(enabled.includes('\n- 待办（dtodo）：'))
+  assert.ok(enabled.includes('\n- 收尾调 dtodo list'))
   assert.ok(!enabled.includes('\n\n待办（dtodo）：'))
 })

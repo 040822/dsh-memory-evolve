@@ -55,27 +55,27 @@ test('snapshot: 有别名注入「你的会话别名」行，无别名不注入'
   const agent = { session: { id: 'sessA', header: { cwd: '/p' } } }
   // 无别名：只有 ID 行
   const snap1 = renderSnapshot(config, store, agent)
-  assert.ok(snap1.includes('你的会话 ID：sessA'))
-  assert.ok(!snap1.includes('你的会话别名'), '无别名不注入别名行')
+  assert.ok(snap1.includes('ID：sessA'))
+  assert.ok(!snap1.includes('别名：'), '无别名不注入别名行')
   // 设别名后：别名 + ID 都注入（AI 知道自己的友好名称）
   new AliasStore(dir).set('sessA', '小明')
   const snap2 = renderSnapshot(config, store, agent)
-  assert.ok(snap2.includes('你的会话别名：小明'), '注入别名行（拟人化）')
-  assert.ok(snap2.includes('你的会话 ID：sessA'), 'ID 仍注入（发消息要用）')
+  assert.ok(snap2.includes('别名：小明'), '注入别名行（拟人化）')
+  assert.ok(snap2.includes('ID：sessA'), 'ID 仍注入（发消息要用）')
   // 会话名称（2026-08-12 用户要求）：有名称注入「你的会话名称」行，
   // 与别名并存；没有名称/别名时输出与旧版一致（只有 ID，零变化兼容）
   const fakeTitle = { get: (session) => (session.id === 'sessA' ? { title: '登录页开发' } : undefined) }
   const snap3 = renderSnapshot(config, store, agent, undefined, fakeTitle)
-  assert.ok(snap3.includes('你的会话名称：登录页开发'), '有名称注入名称行')
-  assert.ok(snap3.includes('你的会话别名：小明'), '名称与别名并存')
+  assert.ok(snap3.includes('名称：登录页开发'), '有名称注入名称行')
+  assert.ok(snap3.includes('别名：小明'), '名称与别名并存')
   // 名称服务不可用/无标题（未传 service）→ 不注入名称行（兼容降级）
   const snap4 = renderSnapshot(config, store, agent)
-  assert.ok(!snap4.includes('你的会话名称'), '无名称服务不注入名称行')
+  assert.ok(!snap4.includes('名称：'), '无名称服务不注入名称行')
   // 名称服务返回无标题 → 也不注入（有别名仍显示别名+ID）
   const emptyTitle = { get: () => undefined }
   const snap5 = renderSnapshot(config, store, agent, undefined, emptyTitle)
-  assert.ok(!snap5.includes('你的会话名称'), '无标题不注入名称行')
-  assert.ok(snap5.includes('你的会话别名：小明'), '别名不受影响')
+  assert.ok(!snap5.includes('名称：'), '无标题不注入名称行')
+  assert.ok(snap5.includes('别名：小明'), '别名不受影响')
   rmSync(dir, { recursive: true, force: true })
 })
 

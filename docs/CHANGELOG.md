@@ -4,6 +4,30 @@
 
 > [English](CHANGELOG.en.md)
 
+## 2026-09-22
+
+### 变更（注入瘦身：每轮常驻开销 -59%）
+
+- **快照注入从 3048 降到 767 字符**（本机真实记忆实测，zh；en 4519 → 1443）：三轨（memory / user / key）统一走渐进式披露，默认 `auto`——条目数 ≤ `trackFullInjectThreshold`(3) 且总字符 ≤ `trackFullInjectCharLimit`(1500) 时全量注入，否则每条一行摘要 `- [id] 摘要`（`[summary:…]` 优先，缺省用正文首行截断 90 字）。超软上限时**从最旧条目开始裁**，段尾追加「其余 N 条用 memory action=list 读取」——裁掉的是注入，不是数据。整段快照受 `snapshotCharBudget`（默认 1200）硬约束：固定段（会话/身份/提示/收尾）先扣，余量按 memory:user:key = 500:300:600 的比例分配，任何一轨都不能把预算吃光。
+- **`memory` 工具的 `expand` 由「仅 key 轨」扩展到 memory / user / key 三轨**——摘要里注入的每个 id 都能取回全文（无身份证的旧条目走 `legacyIdFor` 兜底）；`summary` 参数同样扩到三轨。
+- **`keyProgressiveDisclosure` 默认由 `off` 改为 `auto`**（行为变更：小数据量仍全量，大数据量转摘要）。
+- **工具描述瘦身**：`memory` 工具注入描述 2644 → 1213、`dtodo` 1316 → 846（zh 实测；en 分别为 2270 / 1401）。参数说明一律压到「能选对值」的最小句；情绪反馈的分类树说明改由 `param.category` 承担（只在工具进上下文时才付费）。
+- **快照文案整体压缩（zh + en 同步）**：会话段、读取提示、待办提示、情绪反馈职责、收尾职责等统一取「能驱动行为的最小句」；行为语义与触发条件保持不变。
+- 新增配置键：`memoryProgressiveDisclosure`、`userProgressiveDisclosure`、`trackFullInjectThreshold`、`trackFullInjectCharLimit`、`snapshotCharBudget`、`identityCharLimit`（均可运行时修改）。
+
+### 新增（身份锚点 `[core]`）
+
+- **`[core]` 核心记忆标记**：`memory` 工具 `add` / `replace` 新增 `core: boolean`。带 `[core]` 的条目在快照顶部「身份锚点」段以一行摘要**永远注入**，且**不参与 `snapshotCharBudget` 裁剪**——承载「我是谁 / 你是谁 / 我该做什么」这类跨会话最不可失的记忆。无 core 条目不产生该段（零 token）；`replace` 未显式指定时**继承**旧条目的标记（`core: false` 才去掉）；`identityCharLimit`（默认 300）限制该段总长，超出的条目仍可用 `expand+id` 取回。
+- `[core]` 是条目头部的程序元数据 tag（head 顺序：`[id]` → 时间戳 → `[git]` → `[branch]` → `[dsh-only]` → `[core]` → `[summary:]`），与 `[dsh-only]` 同款实现。**条目格式、`[id:]` 身份机制、`legacyIdFor`、`merge.js` 合并规则、`sync/filesets.js` 白名单一律未改**——同步零回归。
+
+### 测试
+
+- 新增 `tests/injection-budget.test.js`（9 例）：预算硬约束、按轨裁剪与「其余 N 条」取回提示、auto 双阈值边界、三轨摘要注入、三轨 expand 往返、固定文案长度上限（zh / en 双断言）、默认配置断言。
+- 新增 `tests/core-anchor.test.js`（8 例）：`[core]` 解析与 head 保留、工具写入落盘形态、身份段渲染与去重、预算豁免、`replace` 继承/覆盖、`identityCharLimit` 截断后仍可 expand、无 core 不产生该段。
+- 更新受文案变更影响的断言：`tests/plugin.test.js`、`tests/i18n.test.js`、`tests/todo.test.js`、`tests/aliases.test.js`、`tests/coi.test.js`、`tests/config-freshness.test.js`、`tests/progressive-disclosure.test.js`（改为断言行为口径，不再钉死具体措辞）。
+
+---
+
 ## 2026-09-15
 
 ### 修复

@@ -4,6 +4,30 @@ All version changes for this repository, in reverse chronological order.
 
 > [中文](CHANGELOG.md)
 
+## 2026-09-22
+
+### Changed (injection slimming: per-turn resident cost -59%)
+
+- **Snapshot injection drops from 3048 to 767 characters** (measured on this machine's real memory, zh; en 4519 → 1443): all three tracks (memory / user / key) now go through progressive disclosure, `auto` by default — full injection when the entry count ≤ `trackFullInjectThreshold` (3) AND total characters ≤ `trackFullInjectCharLimit` (1500), otherwise one summary line per entry (`- [id] summary`, preferring `[summary:…]`, falling back to the first body line truncated at 90 chars). Over the per-track soft limit the **oldest entries are trimmed first** and a trailing line points at `memory action=list` for the rest — what is trimmed is the injection, never the data. The whole snapshot is bounded by `snapshotCharBudget` (default 1200): fixed sections (session / identity / hints / turn-end) are subtracted first and the remainder is split across memory:user:key at 500:300:600, so no single track can starve the others.
+- **The `memory` tool's `expand` action grows from "key track only" to all three tracks** — every id injected in summary mode can be expanded back to full text (entries without an id fall back to `legacyIdFor`); the `summary` parameter now covers all three tracks too.
+- **`keyProgressiveDisclosure` now defaults to `auto` instead of `off`** (behaviour change: small data still injects in full, large data switches to summaries).
+- **Tool descriptions slimmed**: the `memory` tool's injected description 2644 → 1213 and `dtodo` 1316 → 846 (zh; en 2270 / 1401). Parameter descriptions were reduced to the smallest sentence that still lets the model pick the right value; the feedback category tree moved into `param.category`, which is only paid when the tool enters context.
+- **Snapshot wording compressed across zh + en**: session section, read hints, todo hints, sentiment-feedback duty and turn-end duties now use the smallest sentence that still drives the behaviour; semantics and trigger conditions are unchanged.
+- New config keys: `memoryProgressiveDisclosure`, `userProgressiveDisclosure`, `trackFullInjectThreshold`, `trackFullInjectCharLimit`, `snapshotCharBudget`, `identityCharLimit` (all runtime-changeable).
+
+### Added (identity anchor `[core]`)
+
+- **`[core]` core-memory marker**: `add` / `replace` on the `memory` tool accept `core: boolean`. Entries tagged `[core]` are injected as a one-line summary in an "identity anchor" section at the top of the snapshot, **always, and never trimmed by `snapshotCharBudget`** — they carry who I am / who the user is / what I am here to do, the part that must survive across sessions. With no core entries the section is not emitted at all (zero tokens); `replace` **inherits** the mark unless explicitly overridden (`core: false` removes it); `identityCharLimit` (default 300) caps the section, and entries left out are still reachable via `expand+id`.
+- `[core]` is a program metadata tag in the entry head (order: `[id]` → timestamp → `[git]` → `[branch]` → `[dsh-only]` → `[core]` → `[summary:]`), implemented exactly like `[dsh-only]`. **Entry format, the `[id:]` identity mechanism, `legacyIdFor`, the `merge.js` rules and the `sync/filesets.js` allow-list are untouched** — zero sync regression.
+
+### Tests
+
+- New `tests/injection-budget.test.js` (9 cases): hard budget bound, per-track trimming with the "N more entries" hint, auto dual-threshold boundaries, three-track summary injection, three-track expand round-trip, fixed-wording length ceilings (both zh and en), default-config assertions.
+- New `tests/core-anchor.test.js` (8 cases): `[core]` parsing and head preservation, on-disk shape after a tool write, identity-section rendering and de-duplication, budget exemption, `replace` inheritance/override, still-expandable entries after `identityCharLimit` truncation, no section without core entries.
+- Updated assertions affected by the wording change: `tests/plugin.test.js`, `tests/i18n.test.js`, `tests/todo.test.js`, `tests/aliases.test.js`, `tests/coi.test.js`, `tests/config-freshness.test.js`, `tests/progressive-disclosure.test.js` (now assert behaviour instead of frozen phrasing).
+
+---
+
 ## 2026-09-15
 
 ### Fixed

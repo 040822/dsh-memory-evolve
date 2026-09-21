@@ -1114,7 +1114,7 @@ test('snapshot: COI 状态段已移除（2026-08-13 用户拍板：状态变化�
     assert.ok(!snap.includes('COI 任务状态'), '快照不再注入 COI 状态段')
     assert.ok(!snap.includes('coi-run-1'), '运行中任务不再进快照')
     // 会话 ID 段仍常驻（广播/编排等其他模块的消费者用，与 COI 无关）
-    assert.ok(snap.includes('你的会话 ID'), '会话 ID 段常驻')
+    assert.ok(snap.includes('会话 ID：'), '会话 ID 段常驻')
     assert.ok(snap.includes('sessA'), '注入自己的会话 ID 值')
   } finally {
     rmSync(dir, { recursive: true, force: true })
