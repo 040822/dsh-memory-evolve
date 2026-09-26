@@ -84,7 +84,7 @@ An AI's conversation is "one-shot": switch projects, wait a few days, or open a 
 **How to use it** (see [Memory sync](docs/记忆同步.md) for details):
 
 1. In "Memory Evolve Settings → Config", turn on the **Memory Sync** module switch (this only makes the feature visible);
-2. In the project session's **Memory Sync** tab, turn on **Sync this project** — click "Start sync" (the remote memory defaults to your code repo, auto-stored in a dedicated branch without polluting code), then click "Sync and push" to finish the first push; **code is public (e.g. open-source on GitHub) but you want memory private**? Fill in a **shared memory repo** address — one repo holds all projects' memory (one dedicated branch per project), keeping memory fully isolated from code;
+2. In the project session's **Memory Sync** tab, pick this project's **memory remote** (one of: off / **main code repo** / **shared memory repo**) — the code repo needs zero config (memory goes to a dedicated branch, leaving code untouched), while the shared repo takes an address (one repo holds all projects' memory, one branch per project, fully isolated from code); then use **Sync** to reconcile and **Sync and push** for the first push;
 3. On the other computer, clone the project and open it — **it auto-recognizes** (same repo URL = same project), pull it down and continue;
 4. Write memory as usual (real-time flush, zero latency), accumulate a batch and click "Sync" once; a conflict only appears when both machines edited the same entry — in the tab choose "take local / take remote / keep both".
 

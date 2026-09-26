@@ -127,10 +127,11 @@ interface RuntimeConfig {
   canvasEnabled: boolean
   /** key 轨渐进式披露模式：auto（小数据量全量/大数据量摘要）/ off（始终全量）/ on（始终摘要）。 */
   keyProgressiveDisclosure: 'auto' | 'off' | 'on'
-  /** auto 模式下条目数阈值：条目数 ≤ 此值时全量注入。 */
-  keyFullInjectThreshold: number
-  /** auto 模式下字符数阈值：总字符数 ≤ 此值时全量注入。 */
-  keyFullInjectCharLimit: number
+  /** 三轨共用的 auto 阈值：条目数 ≤ 此值时全文发送。2026-09-27 修复：此前这里
+   *  接的是只对 key 轨生效的遗留键 keyFullInjectThreshold，控件写了不生效。 */
+  trackFullInjectThreshold: number
+  /** 三轨共用的 auto 阈值：总字符数 ≤ 此值时全文发送。 */
+  trackFullInjectCharLimit: number
   /** 记忆写入看门狗（用户拍板 2026-09-04：默认关——根源是模型指令遵循
    *  能力，强模型不需要；打开后连续 N 轮未写 daily/project 快照会置顶提醒）。 */
   perTurnWriteGuard: boolean
@@ -287,8 +288,10 @@ export function MemoryQueueView(props: MemoryQueueViewProps): JSX.Element {
       syncEnabled: draft.syncEnabled,
       canvasEnabled: draft.canvasEnabled,
       keyProgressiveDisclosure: draft.keyProgressiveDisclosure,
-      keyFullInjectThreshold: draft.keyFullInjectThreshold,
-      keyFullInjectCharLimit: draft.keyFullInjectCharLimit,
+      // 2026-09-27 修复：写入渲染实际采用的通用阈值键（此前写的是遗留键
+      // keyFullInjectThreshold/keyFullInjectCharLimit，用户改了不生效）
+      trackFullInjectThreshold: draft.trackFullInjectThreshold,
+      trackFullInjectCharLimit: draft.trackFullInjectCharLimit,
     }
     void api<{ config: RuntimeConfig }>('/api/config', {
       method: 'POST',
@@ -706,7 +709,7 @@ export function MemoryQueueView(props: MemoryQueueViewProps): JSX.Element {
                     min={1}
                     value={draft.writeGuardThreshold}
                     onChange={(event) => {
-                      // 与 keyFullInjectThreshold 同款 clamp：清空/小数/0 → 1
+                      // 与 trackFullInjectThreshold 同款 clamp：清空/小数/0 → 1
                       const n = Number(event.target.value)
                       patchDraft({ writeGuardThreshold: Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1 })
                     }}
@@ -770,37 +773,37 @@ export function MemoryQueueView(props: MemoryQueueViewProps): JSX.Element {
                 </label>
                 <label className="me-field">
                   <span className="me-field-label">
-                    {t('panel.config.keyFullInjectThreshold')}
-                    <em className="me-field-hint">{t('panel.config.keyFullInjectThreshold.hint')}</em>
+                    {t('panel.config.trackFullInjectThreshold')}
+                    <em className="me-field-hint">{t('panel.config.trackFullInjectThreshold.hint')}</em>
                   </span>
                   <input
                     type="number"
                     className="me-input"
                     min={1}
-                    value={draft.keyFullInjectThreshold ?? 3}
+                    value={draft.trackFullInjectThreshold ?? 3}
                     onChange={(event) => {
                       // 审查修复：清空输入框 Number('')=0 会违反服务端 value<1
                       // 校验（保存必失败）——clamp 到最小值 1。
                       const n = Number(event.target.value)
-                      patchDraft({ keyFullInjectThreshold: Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1 })
+                      patchDraft({ trackFullInjectThreshold: Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1 })
                     }}
                   />
                 </label>
                 <label className="me-field">
                   <span className="me-field-label">
-                    {t('panel.config.keyFullInjectCharLimit')}
-                    <em className="me-field-hint">{t('panel.config.keyFullInjectCharLimit.hint')}</em>
+                    {t('panel.config.trackFullInjectCharLimit')}
+                    <em className="me-field-hint">{t('panel.config.trackFullInjectCharLimit.hint')}</em>
                   </span>
                   <input
                     type="number"
                     className="me-input"
                     min={100}
-                    value={draft.keyFullInjectCharLimit ?? 1500}
+                    value={draft.trackFullInjectCharLimit ?? 1500}
                     onChange={(event) => {
                       // 审查修复：清空输入框 Number('')=0 违反 min:100 与服务端
                       // 正整数校验——clamp 到最小值 100。
                       const n = Number(event.target.value)
-                      patchDraft({ keyFullInjectCharLimit: Number.isFinite(n) && n >= 100 ? Math.floor(n) : 100 })
+                      patchDraft({ trackFullInjectCharLimit: Number.isFinite(n) && n >= 100 ? Math.floor(n) : 100 })
                     }}
                   />
                 </label>

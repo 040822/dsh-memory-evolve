@@ -49,8 +49,8 @@ const PANEL_KEYS = [
   'syncEnabled',
   'canvasEnabled',
   'keyProgressiveDisclosure',
-  'keyFullInjectThreshold',
-  'keyFullInjectCharLimit',
+  'trackFullInjectThreshold',
+  'trackFullInjectCharLimit',
 ]
 
 /** 截取 saveConfig 里 `const patch = { ... }` 那一段。 */
