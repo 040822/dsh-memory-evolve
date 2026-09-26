@@ -293,7 +293,15 @@ AI 的对话是「一次性」的：换项目、隔几天、开新会话，它�
 | `memory` 工具描述 | 2644 字符 | **1213** |
 | `dtodo` 工具描述 | 1316 字符 | **846** |
 
-三条记忆轨（memory / user / key）默认 `auto` 渐进式披露：数据量小（条目数 ≤ 3 且总字符 ≤ 1500）时全量注入，数据量大时每条只注入一行摘要 `- [id] 摘要`，模型需要细节时用 `memory action=expand+id` 取全文（三轨都支持）。整段快照受 `snapshotCharBudget`（默认 1200 字符）约束，超预算时从**最旧**条目开始裁，并在段尾标注「其余 N 条用 memory action=list 读取」——裁掉的是注入，不是记忆本身。
+三条记忆轨（memory / user / key）默认 `auto` 渐进式披露：数据量小（条目数 ≤ 3 且总字符 ≤ 1500）时全量注入，数据量大时每条只注入一行摘要 `- [id] 摘要`，模型需要细节时用 `memory action=expand+id` 取全文（三轨都支持）。整段快照受 `snapshotCharBudget`（默认 1200 字符）约束：固定段（会话/身份/提示/收尾）先扣，余量按 memory:user:key = 500:300:600 分配给三轨，超限时**从最旧条目开始裁**（可裁到 0 条）并在段尾标注「其余 N 条用 memory action=list 读取」——裁掉的是注入，不是记忆本身。
+
+**预算契约**（2026-09-22 加固后）：
+
+```
+快照长度 ≤ max(snapshotCharBudget, 固定段长度)
+```
+
+正常配置（中文固定段 ≈ 450 字符、英文 ≈ 935，预算 1200）下上界就是 `snapshotCharBudget`、**与语言无关**；只有把预算配得比固定段还小（例如英文 + 500）才会触底到固定段，那属于**配置下限**而非渲染缺陷。渲染完成后还会按**最终字符串**核对一次总量，超了就从配额最小的轨开始**整轨省略**（省略的是注入而非数据，被省略的轨仍可 `memory action=list/expand` 取回）。**降级阶梯**：`auto` 下全文 → 摘要 → 短取回提示 → 整轨省略；`off` 是显式全量语义，超限只整条裁、不改变形态。`core` 段**不是额外额度**——它在总预算内，只是优先保留、最后被省略。
 
 想要「永远不忘」的内容（我是谁 / 你是谁 / 我在做什么），写入时加 `core: true`：它们进入快照顶部的**身份锚点**段，一行一条、**永不裁剪**（总长由 `identityCharLimit` 控制，默认 300 字符），跨项目、跨会话、跨机器都在。`replace` 不显式指定时自动继承 core 标记。
 
@@ -304,8 +312,8 @@ AI 的对话是「一次性」的：换项目、隔几天、开新会话，它�
 | `memoryProgressiveDisclosure` / `userProgressiveDisclosure` / `keyProgressiveDisclosure` | `auto` | `auto` 自动 / `off` 始终全量 / `on` 始终摘要 |
 | `trackFullInjectThreshold` | 3 | auto：条目数 ≤ 此值才可能全量 |
 | `trackFullInjectCharLimit` | 1500 | auto：总字符 ≤ 此值才可能全量 |
-| `snapshotCharBudget` | 1200 | 整段快照的字符预算（硬上限） |
-| `identityCharLimit` | 300 | 身份锚点段总长上限 |
+| `snapshotCharBudget` | 1200 | 整段快照的字符预算（正常配置下即硬上限） |
+| `identityCharLimit` | 300 | 身份锚点段总长上限（首条同样受限，超出部分用 `expand+id` 取回） |
 
 > 提示：改造后 key 轨的默认注入方式由「始终全量」变为 `auto`（小数据量仍全量）。想恢复旧行为把它设为 `off` 即可。
 

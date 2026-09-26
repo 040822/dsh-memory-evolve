@@ -195,3 +195,112 @@ test('autoSummary 兜底长度受控（无 [summary:] 的旧条目不会把快�
   const line = autoSummary('【很长的正文首行】' + 'y'.repeat(300), 90)
   assert.ok(line.length <= 90, `autoSummary length ${line.length} <= 90`)
 })
+
+/**
+ * 2026-09-22 预算击穿回归（codex gpt-6-astra 实测 4731 字符 / 本机复现 4672 字符）：
+ * 三轨各只有一条超长条目时，auto 模式曾把它判为"数据量小"→ 正文全量注入；而
+ * renderTrack 的裁剪循环保底留一条（`kept.length > 1`）→ 单条超长永不裁。
+ * 两者叠加使快照达到配置预算的 3.89 倍。
+ */
+test('单条超长记忆不再击穿预算（全量形态超软上限时降级为摘要）', () => {
+  const dir = tempDir()
+  try {
+    const store = new MemoryStore(dir)
+    const a = agent()
+    const body = '这是一条用于验证快照预算的中文记忆条目内容。'.repeat(80).slice(0, 1400)
+    for (const target of ['memory', 'user', 'key']) store.add(target, body, a)
+    const config = resolveConfig({ memoryDir: dir })
+    const snap = renderSnapshot(config, store, a)
+    // 该用例数据里没有 core 条目 → 身份锚点段不存在，上界就是预算本身。
+    // （codex 评审 P2：此前写成 budget + identityCharLimit，等于自己放宽了断言）
+    assert.ok(snap.length <= config.snapshotCharBudget,
+      `snapshot ${snap.length} must stay within budget (${config.snapshotCharBudget})`)
+    // 超长正文本身不得进入快照（摘要每行 ≤ SNAPSHOT_SUMMARY_MAX）
+    assert.ok(!snap.includes(body), 'over-long body must not be injected in full')
+    // 三轨都渲染出来，且落到摘要形态（带 expand 取回指引）
+    for (const head of ['长期记忆', '用户档案', '本项目关键记忆']) {
+      assert.ok(snap.includes(head), `${head} section present`)
+    }
+    assert.match(snap, /action=expand\+id/, 'summary mode advertises expand')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('预算守恒：配额分配不得因保底而超分（codex 复现的 budget=700 反例）', () => {
+  // 旧实现：配额 109/65/130 与 floor 101 取 max 后成 109/101/130（合计 340 >
+  // 可用 304）——各轨都没超自己的 softLimit，快照却 721 > 700。这里钉住守恒。
+  const dir = tempDir()
+  try {
+    const store = new MemoryStore(dir)
+    const a = agent()
+    for (const target of ['memory', 'user', 'key']) {
+      for (let i = 0; i < 10; i += 1) {
+        store.add(target, `[summary:${target} 第 ${i} 条摘要] ${target} 正文 ${i}`, a)
+      }
+    }
+    const config = resolveConfig({ memoryDir: dir, snapshotCharBudget: 700 })
+    const snap = renderSnapshot(config, store, a)
+    assert.ok(snap.length <= 700, `snapshot ${snap.length} <= 700（三轨配额之和必须守恒）`)
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('英文快照同样受预算约束（英文固定段更长，曾实测 1316 > 1200）', () => {
+  const dir = tempDir()
+  const saved = process.env.DSH_LOCALE
+  try {
+    const store = new MemoryStore(dir)
+    const a = agent()
+    const body = 'This is a long memory entry used to verify the snapshot budget. '.repeat(40).slice(0, 1400)
+    for (const target of ['memory', 'user', 'key']) store.add(target, body, a)
+    const config = resolveConfig({ memoryDir: dir })
+    setLocale('en')
+    const snap = renderSnapshot(config, store, a)
+    assert.ok(snap.length <= config.snapshotCharBudget,
+      `en snapshot ${snap.length} <= ${config.snapshotCharBudget}`)
+  } finally {
+    setLocale('zh')
+    if (saved === undefined) delete process.env.DSH_LOCALE
+    else process.env.DSH_LOCALE = saved
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('mode:off 保持显式全量语义：超限时整条裁掉，绝不降级成摘要行', () => {
+  // 2026-09-22 修复中曾引入回归：降级条件未限定 mode === 'auto'，导致显式 off
+  // 也被改写成摘要形态，违背 progressive-disclosure 的公开契约。
+  const dir = tempDir()
+  try {
+    const store = new MemoryStore(dir)
+    const a = agent()
+    store.add('key', '长正文'.repeat(400), a) // 1200 字符，超过该轨默认配额
+    const config = resolveConfig({ memoryDir: dir, keyProgressiveDisclosure: 'off' })
+    const snap = renderSnapshot(config, store, a)
+    assert.ok(!snap.includes('摘要'), 'off must not fall back to the summary form')
+    assert.match(snap, /其余 \d+ 条用 memory action=list 读取/, 'over-limit off entry is trimmed whole')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
+
+test('身份锚点首条也受 identityCharLimit 约束（手写超长摘要不得击穿）', () => {
+  // codex 评审 P1：原实现用 `lines.length > 0` 保护额度，首条无论如何都完整
+  // 注入；手写 2000 字 [summary:…] 实测让身份段涨到 2063 字符。
+  const dir = tempDir()
+  try {
+    const store = new MemoryStore(dir)
+    const a = agent()
+    store.add('memory', `[core] [summary:${'核'.repeat(2000)}] 正文`, a)
+    const config = resolveConfig({ memoryDir: dir })
+    const snap = renderSnapshot(config, store, a)
+    const section = snap.split('\n\n').find((s) => s.includes('身份锚点'))
+    assert.ok(section, 'identity section present')
+    assert.ok(section.length <= config.identityCharLimit + 80,
+      `identity section ${section.length} respects the limit`)
+    assert.ok(!section.includes('核'.repeat(500)), 'the over-long summary is truncated in the snapshot')
+  } finally {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})

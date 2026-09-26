@@ -294,7 +294,15 @@ Two costs are paid on every single turn: the injected snapshot and the tool desc
 | `memory` tool description | 2644 chars | **1213** |
 | `dtodo` tool description | 1316 chars | **846** |
 
-All three memory tracks (memory / user / key) use `auto` progressive disclosure by default: small data (≤ 3 entries AND ≤ 1500 chars) is injected in full, larger data injects one summary line per entry (`- [id] summary`), and the model can pull the full text with `memory action=expand+id` (all three tracks support it). The whole snapshot is bounded by `snapshotCharBudget` (1200 chars by default): over budget the **oldest** entries are trimmed first and the section ends with "N more entries: read them with memory action=list" — what is trimmed is the injection, never the memory itself.
+All three memory tracks (memory / user / key) use `auto` progressive disclosure by default: small data (≤ 3 entries AND ≤ 1500 chars) is injected in full, larger data injects one summary line per entry (`- [id] summary`), and the model can pull the full text with `memory action=expand+id` (all three tracks support it). The whole snapshot is bounded by `snapshotCharBudget` (1200 chars by default): fixed sections (session / identity / hints / turn-end) are subtracted first, the remainder is split across memory:user:key at 500:300:600, and over budget the **oldest** entries are trimmed first (down to zero) with a trailing "N more entries: read them with memory action=list" — what is trimmed is the injection, never the memory itself.
+
+**Budget contract** (hardened 2026-09-22):
+
+```
+snapshot length ≤ max(snapshotCharBudget, fixed-section length)
+```
+
+With a normal configuration (zh fixed sections ≈ 450 chars, en ≈ 935, budget 1200) the upper bound is `snapshotCharBudget` itself and is **language-independent**; only a budget smaller than the fixed sections (e.g. en + 500) bottoms out at the fixed sections, which is a **configuration floor**, not a rendering defect. After rendering, the total is checked once more against the **final string**: if it still overflows, whole tracks are dropped starting with the smallest quota (the injection is dropped, not the data — a dropped track is still reachable via `memory action=list/expand`). **Degradation ladder**: under `auto`, full text → summary → short retrieval hint → whole-track omission; `off` is explicit full-injection semantics, so over budget it trims whole entries instead of changing shape. The `core` section is **not an extra allowance** — it lives inside the total budget and is simply kept preferentially and dropped last.
 
 For content that must never be forgotten (who I am / who you are / what I am here to do), write it with `core: true`: it lands in the **identity anchor** section at the top of the snapshot, one line each, **never trimmed** (capped by `identityCharLimit`, 300 chars by default) — across projects, sessions and machines. `replace` inherits the core mark automatically unless overridden.
 
@@ -305,8 +313,8 @@ Config keys (Settings → Config tab, or `plugin-state.json`):
 | `memoryProgressiveDisclosure` / `userProgressiveDisclosure` / `keyProgressiveDisclosure` | `auto` | `auto` / `off` always full / `on` always summary |
 | `trackFullInjectThreshold` | 3 | auto: full injection only at or below this entry count |
 | `trackFullInjectCharLimit` | 1500 | auto: full injection only at or below this char count |
-| `snapshotCharBudget` | 1200 | hard character budget for the whole snapshot |
-| `identityCharLimit` | 300 | cap for the identity-anchor section |
+| `snapshotCharBudget` | 1200 | character budget for the whole snapshot (the hard upper bound under a normal configuration) |
+| `identityCharLimit` | 300 | cap for the identity-anchor section (the first line is capped too; overflow comes back via `expand+id`) |
 
 > Note: the key track's default changed from "always full" to `auto` (small data is still injected in full). Set it to `off` to restore the old behaviour.
 
