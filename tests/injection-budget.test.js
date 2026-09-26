@@ -150,7 +150,9 @@ test('固定注入文案长度上限（zh/en）：防"每轮常驻"文案回涨'
     'snap.turnEndHead': [95, 220],
     'snap.subagentTurnEndHead': [80, 190],
     'snap.batchWriteDuty': [70, 160],
-    'snap.keyDuty': [65, 160],
+    // 2026-09-27：keyDuty 只在显式开启 perTurnKeyWrites 时注入（默认关），
+    // 不再是"每轮常驻"文案；上限按收窄后的三触发时机文案调整。
+    'snap.keyDuty': [85, 260],
     'snap.writeGuardWarning': [165, 350],
   }
   for (const [key, [zhMax, enMax]] of Object.entries(limits)) {

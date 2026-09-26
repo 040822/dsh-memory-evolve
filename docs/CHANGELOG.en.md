@@ -4,6 +4,26 @@ All version changes for this repository, in reverse chronological order.
 
 > [中文](CHANGELOG.md)
 
+## 2026-09-27
+
+### Fixed (metadata mis-detection: tag mentions in the body treated as program metadata)
+
+- **`[core]` / `[dsh-only]` / `[branch:…]` were matched against the whole entry (blocker)**: all three checks used unanchored regexes on the **entire** entry text, so any entry whose body merely *mentions* a tag was mis-detected — a body-level `[core]` promoted the entry into the "never trimmed" identity-anchor section (injected every turn, highest priority); a body-level `[dsh-only]` made the entry **skipped entirely** when injecting into external executors; a body-level `[branch:main]` made the entry **silently disappear** on any other branch. It is a **self-reference trap**: the more an entry discusses the memory system's own metadata, the likelier it is to be caught (two pending suggestions on this machine already mention `[core]`).
+- **Fix**: all three checks now go through the **head region** accepted by `ENTRY_HEAD_RE` (new internal helper `headRegionOf`), matching `splitEntryHead`'s token order; identical text inside the body stays literal. This aligns them with the wording `[summary:…]` already used (`parseEntrySummary` was already anchored). Two write paths that ran `replace` on the whole entry were fixed as well: `add` / `replace` now strip a **leading** `[core]` only (previously a literal `[core]` in the body was deleted); `setEntryDshOnly` now adds/removes the tag inside the head region and inserts it **before** `[core]` (previously an existing `[core]` would be reordered to `[core] [dsh-only]`).
+- Compatibility: existing head-level tags keep working (including hand-written entries without a timestamp) and **no data migration is needed**; entry format, the `[id:]` identity mechanism, the `merge.js` rules and the `sync/filesets.js` allow-list are untouched.
+
+### Changed (key-track write entry disabled by default)
+
+- **`perTurnKeyWrites` defaults to `false` now (was `true`)** (behaviour change): the key track is **always injected** and its budget is scarce (with the 1200-char budget only a handful of entries fit), so a per-turn "did an important fact appear?" prompt taught the model to treat "worth recording" as "submit every turn" — 69 pending suggestions accumulated on this machine between 2026-09-09 and 09-27, and when all 33 of one project's suggestions were accepted in a simulation the snapshot only ever surfaced 1–2 of them (179 chars actually injected for the key section). Default is now off; when explicitly enabled (`perTurnKeyWrites: true`) the wording narrows to three triggers: ① the user explicitly asks to remember a project constraint, ② a stage completes and its conclusion should be pinned, ③ an existing key constraint is found stale or conflicting.
+- The check also changed from `!== false` (unset counted as on) to `=== true` (only an explicit opt-in turns it on), so an `undefined` in old configs no longer reads as enabled.
+
+### Tests
+
+- New `tests/metadata-anchor.test.js` (11 cases): head-level works / body mention ignored for all three parsers; end-to-end rendering (a body-level `[core]` creates no identity section); three write paths (`add core=true`, `replace core=false`, `setEntryDshOnly` toggling and head order); the P1 default and wording. **Counter-check: with the `lib/` changes stashed back to the old implementation, 10 of the 11 cases fail** (the only passer is the neutral "a real core entry still creates the section" case).
+- Updated the comment and assertion wording in `tests/core-anchor.test.js` (its comment still said "appearing anywhere counts as marked, for hand-written files").
+
+---
+
 ## 2026-09-22
 
 ### Fixed (snapshot budget: from allocation quota to a verifiable invariant)

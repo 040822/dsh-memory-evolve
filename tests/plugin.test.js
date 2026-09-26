@@ -186,7 +186,7 @@ test('resolveConfig defaults and validation', () => {
   assert.equal(config.reviewMode, 'suggest')
   assert.equal(config.reviewInterval, 5)
   assert.equal(config.entryDatePrefix, true)
-  assert.equal(config.perTurnKeyWrites, true)
+  assert.equal(config.perTurnKeyWrites, false)
   assert.equal(config.memoryTabEnabled, true)
   assert.equal(config.skillReviewEnabled, false)
   assert.equal(config.skillManageToolName, 'skill_manage')
@@ -583,10 +583,11 @@ test('renderSnapshot injects key facts but keeps project and daily on-demand', a
   assert.ok(snapshot.includes('一次调用'))
   assert.ok(snapshot.includes('entries 数组'))
   assert.ok(snapshot.includes('内容不要自带时间戳'))
-  // key duty: importance-gated, never a per-turn mandate — and it goes
-  // through user confirmation now (提交建议)
-  assert.ok(snapshot.includes('重要项目事实'))
-  assert.ok(snapshot.includes('target=key 建议'))
+  // key duty: 2026-09-27 起**默认关闭**（key 轨常驻注入且额度稀缺，每轮提议
+  // 会让"值得记录"退化成"每轮都提"，实测半个月积压 60+ 条且采纳后多数不可见）。
+  // 默认快照里不再出现 key 建议提示；显式开启时的收窄文案由下面 per-track 测试覆盖。
+  assert.ok(!snapshot.includes('重要项目事实'), 'key duty off by default')
+  assert.ok(!snapshot.includes('target=key 建议'), 'no key suggestion duty by default')
   // subagent sessions get the restrained wording instead of the per-turn duty
   const subSnapshot = renderSnapshot(config, store, { id: 's', session: { header: { origin: 'subagent' } } })
   assert.ok(subSnapshot.includes('独立成果'))
@@ -657,13 +658,15 @@ test('renderSnapshot per-turn write switches compose the hint per track', () => 
   const noDaily = renderSnapshot(resolveConfig({ memoryDir: dir, perTurnDailyWrites: false }), store, agent)
   assert.ok(noDaily.includes('含 target=project 各一项'))
   assert.ok(!noDaily.includes('含 target=daily 各一项'))
-  // both off: the key duty (default on) keeps the checklist alive
+  // key duty explicitly on: it keeps the checklist alive even with both logs off
+  const keyOn = renderSnapshot(resolveConfig({ memoryDir: dir, perTurnProjectWrites: false, perTurnDailyWrites: false, perTurnKeyWrites: true }), store, agent)
+  assert.ok(keyOn.includes('收尾两步'))
+  assert.ok(keyOn.includes('target=key 建议'))
+  // default (key duty off since 2026-09-27) + both logs off → no write duty at all
   const none = renderSnapshot(resolveConfig({ memoryDir: dir, perTurnProjectWrites: false, perTurnDailyWrites: false }), store, agent)
-  assert.ok(none.includes('收尾两步'))
-  assert.ok(none.includes('target=key 建议'))
-  assert.ok(none.includes('target=project'))
-  assert.ok(none.includes('target=daily'))
-  // all three off: no write duty at all, hint degrades to on-demand reads
+  assert.ok(!none.includes('target=key 建议'))
+  assert.ok(!none.includes('收尾两步'))
+  // all three off: same — hint degrades to on-demand reads
   const allOff = renderSnapshot(resolveConfig({ memoryDir: dir, perTurnProjectWrites: false, perTurnDailyWrites: false, perTurnKeyWrites: false }), store, agent)
   assert.ok(!allOff.includes('target=key 建议'))
   assert.ok(!allOff.includes('收尾两步'))

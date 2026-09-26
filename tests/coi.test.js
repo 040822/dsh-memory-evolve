@@ -1019,8 +1019,15 @@ test('memory context: key branch filtering uses declared task branch', () => {
   const agent = { session: { header: { cwd } } }
   // 三条项目关键记忆：无标记（全部）/ main / dev
   store.add('key', '全局可见的项目约定', agent)
-  store.add('key', 'main 分支的约定 [branch:main]', agent)
-  store.add('key', 'dev 分支的约定 [branch:dev]', agent)
+  store.add('key', 'main 分支的约定', agent)
+  store.add('key', 'dev 分支的约定', agent)
+  // 分支标记必须落在**头部区域**才生效（2026-09-27 修复：正文里提及 [branch:…]
+  // 不再是标记），所以用 setEntryBranches 写入——与记忆 Tab 的操作路径一致。
+  for (const [text, br] of [['main 分支的约定', 'main'], ['dev 分支的约定', 'dev']]) {
+    const entry = store.entriesOf('key', agent).find((e) => e.includes(text))
+    const tagged = store.setEntryBranches('key', entry, [br], agent)
+    assert.equal(tagged.ok, true, `branch tag written for ${br}`)
+  }
   // 全局记忆与用户档案（tracks 轨过滤测试用）
   store.add('memory', '全局事实条目', agent)
   store.add('user', '用户偏好条目', agent)

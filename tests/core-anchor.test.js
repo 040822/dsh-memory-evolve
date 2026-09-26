@@ -34,8 +34,10 @@ test('parseEntryCore：[core] 是头部程序 tag，与 [dsh-only]/[summary:] �
   const entry = '[id:abcd1234] [2026-09-22] [dsh-only] [core] [summary:鲸鱼娘人设] 我是鲸鱼娘'
   assert.equal(parseEntryCore(entry), true)
   assert.equal(parseEntrySummary(entry), '鲸鱼娘人设')
-  // 正文里的 [core] 字样不算标记？—— 与其他 tag 同规则：出现即视为标记（兼容手写文件）
+  // 只认**头部区域**的 [core]（2026-09-27 修复）：正文里提到这个 tag 不算
+  // 标记——详见 tests/metadata-anchor.test.js。
   assert.equal(parseEntryCore('[2026-09-22] 普通条目'), false)
+  assert.equal(parseEntryCore('[2026-09-22] 正文里提到 [core] 也不算标记'), false)
   // 头序列顺序：[id] → 时间戳 → [dsh-only] → [core] → [summary:]，全部进 head
   const { head, body } = splitEntryHead(entry, 'memory')
   assert.ok(head.includes('[core]'), 'core stays in head (preserved on edit)')
