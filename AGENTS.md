@@ -18,7 +18,17 @@ DSH 记忆插件（fork 自 `csyangwen/dsh-memory-evolve`，上游 base `c337dc1
 
 - 改完要 `sudo systemctl restart dsh-web.service` 才生效（link 装机，运行中的进程用的是旧代码）
 - 本地产副本下**不要点插件「更新」按钮**（会 checkout 离开开发分支）
-- 客户端是构建产物：`src/client/**` 改动需要 esbuild 重建 `lib/client.js`，**本机没有 esbuild** —— 未重建前不要改客户端源码
+- 客户端是构建产物：`src/client/**` 改动后**必须重建** `lib/client.js`。本机没有现成 esbuild，但可以在工作区装一份再重建（2026-09-27 实测可行）：
+
+  ```bash
+  mkdir -p /home/wenxin/office/dsh/.tools/esbuild-checkout && cd $_
+  npm_config_cache=/home/wenxin/office/dsh/.tools/npm-cache npm i esbuild@0.28.1 --no-save
+  cd /home/wenxin/office/dsh/plugins/dsh-memory-evolve
+  DSH_SOURCE=/home/wenxin/office/dsh/.tools/esbuild-checkout node scripts/build.mjs
+  ```
+
+  两个坑：① 产物里的中文是 `\uXXXX` 转义，**grep 文案要用转义串**（`grep -c 'u4FDD\\u5B58'`），直接搜中文搜不到；② 重建后看 diff 规模——`styles.css` 若含超过 2 个反引号会让 text loader 换格式、整体重排，那种情况要单独说明。
+- 面板字段清单测试 `tests/client-config-save.test.js` 会同时校验源码与产物里 `saveConfig` 发送的键；改面板字段要同步它的 `PANEL_KEYS`
 - 发布纪律与版本/Tag 纪律见仓库根 `AGENTS.md`（本地测试通过才谈推送；版本号与 tag 由用户决定）
 
 ## 设计约定
